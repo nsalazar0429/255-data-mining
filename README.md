@@ -1,4 +1,5 @@
-# 🧠 255 Data Mining Project — Setup & Execution Guide
+# 🧠 255 Data Mining Project - Fraud Detection
+# Setup & Execution Guide
 
 This README provides the complete step-by-step instructions to set up your environment, install dependencies, and run the data preprocessing and Apriori analysis scripts successfully on macOS using **Homebrew Python** and a **virtual environment**.
 
