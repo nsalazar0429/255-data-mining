@@ -215,8 +215,8 @@ plt.scatter(points_2d[~rules_df["is_anomalous"], 0],
 plt.scatter(points_2d[rules_df["is_anomalous"], 0],
             points_2d[rules_df["is_anomalous"], 1],
             color='red', s=30, alpha=0.9, label='Anomaly')
-plt.xlabel("PCA 1")
-plt.ylabel("PCA 2")
+plt.xlabel("Feature 1")
+plt.ylabel("Feature 2")
 plt.title("Clusters with Anomalies Highlighted")
 plt.legend()
 plt.tight_layout()
@@ -250,8 +250,8 @@ assert points_2d.shape[0] == len(rules_df), "Mismatch: points_2d vs rules_df row
 plt.figure()
 plt.scatter(points_2d[:, 0], points_2d[:, 1], s=10, alpha=0.6, c=labels)
 plt.scatter(centroids_2d[:, 0], centroids_2d[:, 1], s=120, marker="X", edgecolors="black")
-plt.xlabel("PCA 1")
-plt.ylabel("PCA 2")
+plt.xlabel("Feature 1")
+plt.ylabel("Feature 2")
 plt.title("Clusters in PCA Space")
 plt.tight_layout()
 plt.savefig("outputs/plot_pca_clusters.png", dpi=150)
