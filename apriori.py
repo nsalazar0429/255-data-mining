@@ -5,7 +5,7 @@ from mlxtend.frequent_patterns import apriori, association_rules
 transactions_df = pd.read_csv('outputs/transaction.csv')
 
 # 1. Identify the columns you want to exclude
-columns_to_exclude = ['transaction_id','ClaimID_hash','PatientID_hash','ProviderID_hash']
+columns_to_exclude = ['transaction_id','ClaimID_hash','PatientID_hash','ProviderID_hash', 'ClaimDate_unknown_date']
 
 # 2. Create the final DataFrame by dropping the unwanted columns
 #    The 'axis=1' ensures that we drop columns, not rows.
