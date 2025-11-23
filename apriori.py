@@ -17,10 +17,10 @@ transactions_df_for_apriori = transactions_df.drop(
 )
 
 # Find common values using the apriori algorithm
-frequent_itemsets = apriori(transactions_df_for_apriori, min_support=0.1, use_colnames=True)
+frequent_itemsets = apriori(transactions_df_for_apriori, min_support=0.05, use_colnames=True)
 
 # Generate the association rules
-rules = association_rules(frequent_itemsets, metric="confidence", min_threshold=0.5)
+rules = association_rules(frequent_itemsets, metric="confidence", min_threshold=0.05)
 
 #sort rules by confidence in descending order
 rules_sorted = rules.sort_values(by='confidence', ascending=False)
