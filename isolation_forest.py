@@ -1,11 +1,8 @@
 import pandas as pd
 from sklearn.ensemble import IsolationForest
 from sklearn.metrics import silhouette_score
-from sklearn.decomposition import PCA
-import plotly.express as px
 from collections import Counter
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 
 # 1. Define the dynamic ranges
 # Contamination: 0.01 to 0.20 (inclusive)
@@ -69,7 +66,7 @@ outliers['N_estimators'] = best_if_params['n_estimators']
 outliers.to_csv('outputs/isolation_forest_outliers.csv', index=False)
 print(f"✓ Saved outliers with original values, Silhouette score, and best parameters to outputs/isolation_forest_outliers.csv")
 
-# --- 4. Identify the "Global Driver" Features ---
+# --- Identify the "Global Driver" Features ---
 print("Identifying Top Driving Features...")
 
 # Get outlier rows as a DataFrame first
@@ -77,7 +74,7 @@ outlier_rows_df = scaled_vector_df[scaled_vector_df['IF_Anomaly'] == -1]
 
 # Select only the feature columns (exclude IF_Anomaly and IF_Score)
 feature_cols = [col for col in scaled_vector_df.columns if col not in ['IF_Anomaly', 'IF_Score']]
-outlier_rows = outlier_rows_df[feature_cols]  # Now this is a 2D array with only feature columns
+outlier_rows = outlier_rows_df[feature_cols]
 
 outlier_top_features = {}
 for index, row in outlier_rows.iterrows():
@@ -109,6 +106,6 @@ ax.set_ylabel(y_col)
 ax.set_zlabel(z_col)
 ax.set_title('3D Plot of Top Driver Features - ISOLATION FOREST')
 ax.legend()
-plt.savefig('outputs/top_drivers_3d.png')
+plt.savefig('outputs/top_drivers_3d_ISOLATION_FOREST.png')
 plt.close()
-print('✓ 3D scatter plot saved to outputs/top_drivers_isolation_forest.png')
+print('✓ 3D scatter plot saved to outputs/top_drivers_ISOLATION_FOREST.png')
