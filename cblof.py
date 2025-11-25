@@ -8,9 +8,8 @@ from sklearn.metrics import silhouette_score
 from sklearn.decomposition import PCA
 from sklearn.metrics import silhouette_samples
 
-from mpl_toolkits.mplot3d import Axes3D
-
-
+OUTPUT_DIR = "outputs"
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 RULE_INPUT = "outputs/vectorized.csv"
 CBLOF_OUTPUT = "outputs/cblof_scores.csv"
 
@@ -140,7 +139,6 @@ dist_to_centroid = np.linalg.norm(num_features_scaled - assigned, axis=1)
 rules_df["dist_to_centroid"] = dist_to_centroid
 
 # gets creates an array of clusters sizes
-cluster_num = kMean_model.n_clusters
 cluster_sizes = np.bincount(labels, minlength=cluster_num)
 
 # cblof acts as a CBLOF proxy that mulitpies each points by the size of each cluster
@@ -259,7 +257,6 @@ plt.ylabel("Feature 2")
 plt.title("Clusters with Anomalies Highlighted")
 plt.legend()
 plt.tight_layout()
-os.makedirs("outputs", exist_ok=True)
 plt.savefig("outputs/plot_clusters_normals_vs_anomalies.png", dpi=200)
 plt.show()
 # ****************************************************
@@ -271,11 +268,8 @@ pd.DataFrame({"cluster": np.arange(cluster_num), "size": cluster_sizes}).to_csv(
     "outputs/kMean_cluster_sizes.csv", index=False
 )
 
-pca = PCA(n_components=2, random_state=42)
-points_2d = pca.fit_transform(num_features_scaled)
-centroids_2d = pca.transform(centroid_scaled)
-
-# ********* TEST ********
+# ********* overall outcome ********
+print()
 print("--- Diagnostics ---")
 print("Rows after cleaning:", len(rules_df))
 print("points_2d shape:", points_2d.shape)
@@ -285,7 +279,7 @@ print("Unique clusters:", np.unique(labels))
 print("Cluster sizes:", np.bincount(labels))
 assert points_2d.shape[0] == len(rules_df), "Mismatch: points_2d vs rules_df rows"
 
-# ********* 2D PCA scatter plot ********
+# ********* TOP Features ********
 top_features = feature_diffs.head(2).index.tolist()
 plt.figure(figsize=(7, 5))
 plt.scatter(rules_df.loc[~rules_df["is_anomalous"], top_features[0]], rules_df.loc[~rules_df["is_anomalous"], top_features[1]], color='blue', s=10, alpha=0.4, label='Normal')
@@ -297,7 +291,18 @@ plt.legend()
 plt.tight_layout()
 plt.savefig("outputs/plot_top_features_scatter.png", dpi=150)
 plt.show()
-# ********* 3D PCA scatter plot ********
+
+# ********* 2D Cluster scatter plot ********
+plt.figure()
+plt.scatter(points_2d[:, 0], points_2d[:, 1], s=10, alpha=0.6, c=labels)
+plt.scatter(centroids_2d[:, 0], centroids_2d[:, 1], s=120, marker="X", edgecolors="black")
+plt.xlabel("Feature 1")
+plt.ylabel("Feature 2")
+plt.title("Clusters in 2D Space")
+plt.tight_layout()
+plt.savefig("outputs/plot_pca_clusters.png", dpi=150)
+plt.show()
+# ********* 3D Cluster scatter plot ********
 pca3d = PCA(n_components=3, random_state=42)
 points_3d = pca3d.fit_transform(num_features_scaled)
 centroids_3d = pca3d.transform(centroid_scaled)
@@ -322,11 +327,10 @@ ax.scatter(centroids_3d[:, 0], centroids_3d[:, 1], centroids_3d[:, 2],
 ax.set_xlabel("PCA 1")
 ax.set_ylabel("PCA 2")
 ax.set_zlabel("PCA 3")
-ax.set_title("3D PCA View of Clusters and Anomalies")
+ax.set_title("3D View of Clusters and Anomalies")
 ax.legend(loc='best')
 
 plt.tight_layout()
-os.makedirs("outputs", exist_ok=True)
 plt.savefig("outputs/plot_clusters_3d.png", dpi=200)
 plt.show()
 # ***************************************
