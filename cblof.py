@@ -57,7 +57,7 @@ plt.ylabel("Silhouette Score")
 plt.title("Silhouette Score vs. Number of Clusters")
 plt.grid(True, alpha=0.4)
 plt.tight_layout()
-plt.savefig("outputs/plot_silhouette_vs_k.png", dpi=150)
+plt.savefig("outputs/CBLOF_silhouette_vs_k.png", dpi=150)
 plt.show()
 # ********************************************
 
@@ -86,7 +86,7 @@ plt.xlabel("Cluster label")
 plt.ylabel("Size (rows)")
 plt.title("K-Means Cluster Sizes")
 plt.tight_layout()
-plt.savefig("outputs/plot_cluster_sizes.png", dpi=150)
+plt.savefig("outputs/CBLOF_cluster_sizes.png", dpi=150)
 plt.show()
 # ***************************************
 
@@ -114,7 +114,7 @@ plt.xlabel("Distance to Centroid Histogram(scaled)")
 plt.ylabel("Count")
 plt.title("Distribution of Distances to Centroid")
 plt.tight_layout()
-plt.savefig("outputs/plot_distance_hist.png", dpi=150)
+plt.savefig("outputs/CBLOF_distance_hist.png", dpi=150)
 plt.show()
 # ***************************************
 
@@ -161,7 +161,7 @@ plt.gca().invert_yaxis()
 plt.xlabel("Mean Difference (Anomaly vs Normal)")
 plt.title(f"Top Features Driving Anomalies")
 plt.tight_layout()
-plt.savefig("outputs/plot_top_features_driving_anomalies.png", dpi=150)
+plt.savefig("outputs/CBLOF_top_features_driving_anomalies.png", dpi=150)
 plt.show()
 
 # *** Threshold Histogram after Anomoly detection ***
@@ -172,7 +172,7 @@ plt.xlabel("CBLOF Score")
 plt.ylabel("Count")
 plt.title(f"CBLOF Distribution (threshold = {cblof_threshold:.2f})")
 plt.tight_layout()
-plt.savefig("outputs/plot_cblof_hist.png", dpi=150)
+plt.savefig("outputs/CBLOF_hist.png", dpi=150)
 plt.show()
 
 # ********* Anomolies Scattrter Plot **************
@@ -196,7 +196,7 @@ plt.scatter(centroids_2d[:, 0], centroids_2d[:, 1],
 plt.title("Clusters with Anomalies Highlighted")
 plt.legend()
 plt.tight_layout()
-plt.savefig("outputs/plot_clusters_normals_vs_anomalies.png", dpi=200)
+plt.savefig("outputs/CBLOF_clusters_normals_vs_anomalies.png", dpi=200)
 plt.show()
 
 rules_df.to_csv("outputs/rules_with_cblof.csv", index=False)
@@ -225,7 +225,7 @@ plt.ylabel(top_features[1])
 plt.title(f"Anomalies in Feature Space: {top_features[0]} vs {top_features[1]}")
 plt.legend()
 plt.tight_layout()
-plt.savefig("outputs/plot_top_features_scatter.png", dpi=150)
+plt.savefig("outputs/CBLOF_top_features_scatter.png", dpi=150)
 plt.show()
 
 # ********* 2D Cluster scatter plot ********
@@ -234,7 +234,7 @@ plt.scatter(points_2d[:, 0], points_2d[:, 1], s=10, alpha=0.6, c=labels)
 plt.scatter(centroids_2d[:, 0], centroids_2d[:, 1], s=120, marker="X", edgecolors="black")
 plt.title("Clusters in 2D Space")
 plt.tight_layout()
-plt.savefig("outputs/plot_clusters_2d.png", dpi=150)
+plt.savefig("outputs/CBLOF_clusters_2d.png", dpi=150)
 plt.show()
 
 # ********* 3D Cluster scatter plot ********
@@ -261,7 +261,7 @@ ax.scatter(centroids_3d[:, 0], centroids_3d[:, 1], centroids_3d[:, 2],
 ax.set_title("3D View of Clusters and Anomalies")
 ax.legend(loc='best')
 plt.tight_layout()
-plt.savefig("outputs/plot_clusters_3d.png", dpi=200)
+plt.savefig("outputs/CBLOF_clusters_3d.png", dpi=200)
 plt.show()
 # ***************************************
 
