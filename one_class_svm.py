@@ -87,15 +87,16 @@ def apply_percentile_thresholding(scores, percentile=99):
 def identify_top_driver_features(scaled_vector_df, anomaly_labels, feature_cols):
     """Find which features stand out the most in the outliers."""
     outlier_rows = scaled_vector_df[anomaly_labels == -1][feature_cols]
-    normal_rows = scaled_vector_df[anomaly_labels == 1][feature_cols]
     
     outlier_means = outlier_rows.mean()
-    normal_means = normal_rows.mean()
+    outlier_top_features = {}
+    for index, row in outlier_rows.iterrows():
+        top_3 = row.abs().nlargest(3).index.tolist()
+        outlier_top_features[index] = top_3
     
     # Big differences mean those features are more important
-    feature_importance = (outlier_means - normal_means).abs()
-    
-    top_drivers = feature_importance.nlargest(3).index.tolist()
+    all_features = [feature for features in outlier_top_features.values() for feature in features]
+    top_drivers = [feature for feature, _ in Counter(all_features).most_common(3)]
     return top_drivers
 
 def identify_top_driver_features_frequency(scaled_vector_df, anomaly_labels, feature_cols):
@@ -250,40 +251,65 @@ def main():
     print("\n[5/6] Figuring out which features matter most (RBF Kernel)...")
     print("-" * 60)
     
-    feature_cols = [col for col in scaled_vector_df.columns 
-                    if col not in ['SVM_Anomaly', 'SVM_Score', 'SVM_RBF_Anomaly', 
-                                   'SVM_RBF_Score', 'SVM_Poly_Anomaly', 'SVM_Poly_Score']]
-    
-    if len(unscaled_vector_df[unscaled_vector_df['SVM_RBF_Anomaly'] == -1]) > 0:
+        # Find the most important features using the BEST kernel
+    print("\n[5/6] Figuring out which features matter most (best kernel)...")
+    print("-" * 60)
+
+    feature_cols = [
+        col for col in scaled_vector_df.columns
+        if col not in [
+            'SVM_Anomaly', 'SVM_Score',
+            'SVM_RBF_Anomaly', 'SVM_RBF_Score',
+            'SVM_Poly_Anomaly', 'SVM_Poly_Score'
+        ]
+    ]
+
+    # Decide which kernel is better based on silhouette score
+    kernel_scores = {
+        "rbf": best_score,
+        "poly": best_poly_score
+    }
+    best_kernel = max(kernel_scores, key=kernel_scores.get)
+    print(f"✓ Best kernel based on silhouette score: {best_kernel}")
+
+    # Map kernel name to the correct anomaly column
+    kernel_to_anom_col = {
+        "rbf": "SVM_RBF_Anomaly",
+        "poly": "SVM_Poly_Anomaly"
+    }
+
+    anom_col = kernel_to_anom_col[best_kernel]
+    y_anom = unscaled_vector_df[anom_col]
+
+    if len(unscaled_vector_df[y_anom == -1]) > 0:
         # Use two methods to find top features
         top_drivers_statistical = identify_top_driver_features(
-            scaled_vector_df, unscaled_vector_df['SVM_RBF_Anomaly'], feature_cols
+            scaled_vector_df, y_anom, feature_cols
         )
         print(f"✓ Statistical Method (Mean Difference): {top_drivers_statistical}")
-        
+
         top_drivers_frequency = identify_top_driver_features_frequency(
-            scaled_vector_df, unscaled_vector_df['SVM_RBF_Anomaly'], feature_cols
+            scaled_vector_df, y_anom, feature_cols
         )
         print(f"✓ Frequency-Based Method (Top-3 Count): {top_drivers_frequency}")
-        
+
         # If both methods agree, use that. Otherwise, go with the statistical one.
         if top_drivers_statistical == top_drivers_frequency:
             print(f"✓ Both methods agree! Using: {top_drivers_statistical}")
             top_drivers = top_drivers_statistical
         else:
-            print(f"⚠ Methods differ. Using statistical method for visualization.")
+            print("⚠ Methods differ. Using statistical method for visualization.")
             top_drivers = top_drivers_statistical
-        
-        # Make a 3D plot
+
+        # Make a 3D plot with best kernel’s anomalies
         print("\n[6/6] Creating a 3D visualization...")
         create_3d_visualization(
-            unscaled_vector_df, unscaled_vector_df['SVM_RBF_Anomaly'], 
-            top_drivers, OUTPUT_GRAPH_PATH
+            unscaled_vector_df, y_anom, top_drivers, OUTPUT_GRAPH_PATH
         )
         print(f"✓ 3D scatter plot saved to {OUTPUT_GRAPH_PATH}")
     else:
-        print("⚠ No outliers found, so skipping the visualization")
-    
+        print("⚠ No outliers found for the best kernel, so skipping the visualization")
+
     print("\n" + "=" * 60)
     print("✓ All done! One-Class SVM analysis finished.")
     print("=" * 60)
