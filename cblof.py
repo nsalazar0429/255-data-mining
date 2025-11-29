@@ -4,9 +4,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
-from sklearn.metrics import silhouette_score
+from sklearn.metrics import silhouette_score, silhouette_samples
 from sklearn.decomposition import PCA
-from sklearn.metrics import silhouette_samples
 
 OUTPUT_DIR = "outputs"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -15,39 +14,25 @@ CBLOF_OUTPUT = "outputs/cblof_scores.csv"
 
 # ~~~~~~ Load the rules CSV and quick clean just in case ~~~~~~~~~
 rules_df = pd.read_csv(RULE_INPUT)
-
-print("\nHead: \n", rules_df.head())
-print("\nInfo: \n", rules_df.info())
-
 rules_df.dropna(how='all', inplace=True)
 
 if rules_df.empty:
     print("The Rules Data Frame is empty!")
 
-# Identifying numeric columns of the data and droping missing values in numeric columns
 numeric_columns = rules_df.select_dtypes(include="number").columns
-print("\nNumeric Columns: \n", numeric_columns)
-
 rules_df.dropna(subset=numeric_columns, inplace=True)
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# ~~~~~~~~~~~~~~~~~~~~~ Feature Prep ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-# extracted 2d matrix for sklearn in a clean and scaled way to be more easily processed in Kmeans
+# ~~~~~~~~~~~~~~~~~~~~~ Feature Prep ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 num_features_2dMatrix = rules_df[numeric_columns].values
 
-#standardizes each feature to be consistent in the 2d matrix
 scaler = StandardScaler()
 num_features_scaled = scaler.fit_transform(num_features_2dMatrix)
 
-print("\nMeans: \n", np.mean(num_features_scaled, axis=0))
-print("\nStandard Deviation: \n", np.std(num_features_scaled, axis=0))
-print("")
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # ~~~~~~~~~~~~~~~~~~~~~~~~ K-mean Cluster ~~~~~~~~~~~~~~~~~~~~~~~~~
-
 k_range = range(2, 11)
-best_k, best_sil = None, -1.0
 silhouette_per_k = []
+best_k= None 
+best_sil = -1.0
 
 for k in k_range:
     try:
@@ -60,6 +45,7 @@ for k in k_range:
     else:
         sil = -1.0
     silhouette_per_k.append(sil)
+
     if sil > best_sil:
         best_sil, best_k = sil, k
 
@@ -78,35 +64,19 @@ plt.show()
 cluster_num = best_k
 print(f"[Auto-k] Using k={cluster_num} (best silhouette={best_sil:.3f})")
 
-
-# cluster_num = 6     #allows for repoducability
 RANDOM_STATE = 42   #default number used for random states
 
-# any try excepts allows for adaptability between sklean versions
-# in this case it is the starting implementation of K-Mean
 try:
     kMean_model = KMeans(n_clusters=cluster_num, random_state=RANDOM_STATE, n_init="auto")
 except TypeError:
     kMean_model = KMeans(n_clusters=cluster_num, random_state=RANDOM_STATE, n_init=10)
 
-
-# essentially categorizing cluster groups 
 labels = kMean_model.fit_predict(num_features_scaled)
-# helps find where the center of each cluster group
+
 centroid_scaled = kMean_model.cluster_centers_
 centroid_original = scaler.inverse_transform(centroid_scaled)
 
-
-# calculates the estimated size of each cluster and ensuring that there are 4 clusters
 cluster_size = np.bincount(labels, minlength=cluster_num)
-
-
-# logs each cluster's information: size, centroid location and if the cluster are reasonable based on
-#   size difference betwene groups and pattern
-print("Cluster size:\n", cluster_size)
-print("Centroids (scaled):\n", pd.DataFrame(centroid_scaled))
-if centroid_original is not None:
-    print("Centroids (original units):\n", pd.DataFrame(centroid_original))
 
 # ******* Cluster Size Bar Chart *******
 plt.figure()
@@ -118,32 +88,22 @@ plt.title("K-Means Cluster Sizes")
 plt.tight_layout()
 plt.savefig("outputs/plot_cluster_sizes.png", dpi=150)
 plt.show()
+# ***************************************
 
-# centroid table to save for record
 centroids_df = pd.DataFrame(centroid_original, columns=numeric_columns)
 centroids_df.index.name = "Cluster"
 centroids_df.to_csv("outputs/centroids_original_units.csv", index=False)
-# ***************************************
 
-# stores the labels into the Rules DataFrame
 rules_df["kMean_label"] = labels
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# ~~~~~~~~~~ Distances, CBLOF core and labels redux ~~~~~~~~~~~~~~~~
 
-# picks the centriods of each row and computes euclidian distance in scaled space from each point to
-#   it's point it is assigned to
+# ~~~~~~~~~~ Distances, CBLOF core and labels redux ~~~~~~~~~~~~~~~~
 assigned = centroid_scaled[labels]
 dist_to_centroid = np.linalg.norm(num_features_scaled - assigned, axis=1)
 
-# stores the data of each row distance into the Rules DataFrame
 rules_df["dist_to_centroid"] = dist_to_centroid
 
-# gets creates an array of clusters sizes
 cluster_sizes = np.bincount(labels, minlength=cluster_num)
 
-# cblof acts as a CBLOF proxy that mulitpies each points by the size of each cluster
-#   best to think, if a point is far from the centroid and is in a larged cluster that point gets a 
-#   higher score then stores the data in the Rules DataFrame
 cblof = cluster_sizes[labels] * dist_to_centroid
 rules_df["cblof"] = cblof
 
@@ -158,40 +118,25 @@ plt.savefig("outputs/plot_distance_hist.png", dpi=150)
 plt.show()
 # ***************************************
 
-# this is a threshold helper that provides 3 ways to decide which points are anomolies
 def label_anomalies_cblof(cblof_scores, method="highest_scores", highest_scores=22, percent=95, k=3.0):
-    # consolidates all scores of each point for ease of processing
     s = np.asarray(cblof_scores)
 
     if method == "highest_scores":
-        # sorts all points by size largest to smallest and chooses the highest ones 
-        #   marking potential anaomolies = true and normal = false
-
         highest_id = np.argsort(s)[-highest_scores:]
         flags = np.zeros_like(s, dtype=bool)
         flags[highest_id] = True
         threshold = s[highest_id].min() if highest_scores > 0 else np.inf
-
     elif method == "percent":
-        # sets what percent of the data points you want to be normal
-        #   in our case 95% is normoal points wile 5% are anomalies
-
         threshold = np.percentile(s, percent)
         flags = s >= threshold
-        
     elif method == "stat":
-        # computes the average score/mean and the standard deviation (how spread out the scores are)
-        #   anything farther than the average margins are considered anomolies
-
         mu, sigma = s.mean(), s.std(ddof=0)
         threshold = mu + k * sigma
         flags = s >= threshold
-
     else:
         raise ValueError("method must be 'highest_scores', 'percentile', or 'stat'")
     return flags, threshold
 
-# selects the top 22 highest scoring points and stores the data into Rules DataFrame
 anomaly_flags, cblof_threshold = label_anomalies_cblof(
     rules_df["cblof"].values,
     method="highest_scores",
@@ -199,9 +144,9 @@ anomaly_flags, cblof_threshold = label_anomalies_cblof(
     percent=95,
     k=3.0
 )
+
 rules_df["is_anomalous"] = anomaly_flags
 
-# --- Identify features driving the anomalies ---
 anomalies = rules_df[rules_df["is_anomalous"]]
 normals = rules_df[~rules_df["is_anomalous"]]
 
@@ -209,21 +154,15 @@ feature_diffs = (
     anomalies[numeric_columns].mean() - normals[numeric_columns].mean()
 ).abs().sort_values(ascending=False)
 
-print("\nTop features driving anomalies:\n", feature_diffs.head(10))
-
 # ********* Plot top feature differences *********
-top_n = 10
 plt.figure(figsize=(8, 5))
-feature_diffs.head(top_n).plot(kind='barh', color='firebrick', alpha=0.8)
+feature_diffs.head(10).plot(kind='barh', color='firebrick', alpha=0.8)
 plt.gca().invert_yaxis()
 plt.xlabel("Mean Difference (Anomaly vs Normal)")
-plt.title(f"Top {top_n} Features Driving Anomalies")
+plt.title(f"Top Features Driving Anomalies")
 plt.tight_layout()
 plt.savefig("outputs/plot_top_features_driving_anomalies.png", dpi=150)
 plt.show()
-# ****************************************************
-
-print(f"Anomalies flagged: {rules_df['is_anomalous'].sum()}, threshold={cblof_threshold:.4f}")
 
 # *** Threshold Histogram after Anomoly detection ***
 plt.figure()
@@ -242,9 +181,11 @@ points_2d = pca.fit_transform(num_features_scaled)
 centroids_2d = pca.transform(centroid_scaled)
 
 plt.figure(figsize=(8, 6))
+
 plt.scatter(points_2d[~rules_df["is_anomalous"], 0],
             points_2d[~rules_df["is_anomalous"], 1],
             color='blue', s=8, alpha=0.3, label='Normal')
+
 plt.scatter(points_2d[rules_df["is_anomalous"], 0],
             points_2d[rules_df["is_anomalous"], 1],
             color='red', edgecolors='black', linewidths=0.3, s=18, alpha=0.85, label='Anomaly')
@@ -252,16 +193,11 @@ plt.scatter(points_2d[rules_df["is_anomalous"], 0],
 plt.scatter(centroids_2d[:, 0], centroids_2d[:, 1],
             s=100, marker="x", linewidths=2, color="black", label="Centroid")
 
-plt.xlabel("Feature 1")
-plt.ylabel("Feature 2")
 plt.title("Clusters with Anomalies Highlighted")
 plt.legend()
 plt.tight_layout()
 plt.savefig("outputs/plot_clusters_normals_vs_anomalies.png", dpi=200)
 plt.show()
-# ****************************************************
-
-
 
 rules_df.to_csv("outputs/rules_with_cblof.csv", index=False)
 pd.DataFrame({"cluster": np.arange(cluster_num), "size": cluster_sizes}).to_csv(
@@ -296,12 +232,11 @@ plt.show()
 plt.figure()
 plt.scatter(points_2d[:, 0], points_2d[:, 1], s=10, alpha=0.6, c=labels)
 plt.scatter(centroids_2d[:, 0], centroids_2d[:, 1], s=120, marker="X", edgecolors="black")
-plt.xlabel("Feature 1")
-plt.ylabel("Feature 2")
 plt.title("Clusters in 2D Space")
 plt.tight_layout()
-plt.savefig("outputs/plot_pca_clusters.png", dpi=150)
+plt.savefig("outputs/plot_clusters_2d.png", dpi=150)
 plt.show()
+
 # ********* 3D Cluster scatter plot ********
 pca3d = PCA(n_components=3, random_state=42)
 points_3d = pca3d.fit_transform(num_features_scaled)
@@ -320,33 +255,25 @@ ax.scatter(points_3d[rules_df["is_anomalous"], 0],
            points_3d[rules_df["is_anomalous"], 2],
            color='red', edgecolors='black', linewidths=0.3, s=25, alpha=0.85, label='Anomaly')
 
-# Centroids as X's (not stars)
 ax.scatter(centroids_3d[:, 0], centroids_3d[:, 1], centroids_3d[:, 2],
            color='black', marker='x', s=120, linewidths=2.2, label='Centroid')
 
-ax.set_xlabel("PCA 1")
-ax.set_ylabel("PCA 2")
-ax.set_zlabel("PCA 3")
 ax.set_title("3D View of Clusters and Anomalies")
 ax.legend(loc='best')
-
 plt.tight_layout()
 plt.savefig("outputs/plot_clusters_3d.png", dpi=200)
 plt.show()
 # ***************************************
 
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # ~~~~~~~~~~~~~ Building a clean CBLOF score table ~~~~~~~~~~~~~~~~~
-
-# assigning more descriptive columns and and builds a map of cluster label by size per row
 id_cols = rules_df.select_dtypes(exclude=np.number).columns.tolist()
 cluster_size_map = pd.Series(cluster_sizes, index=np.arange(cluster_num))
 per_row_cluster_size = cluster_size_map.loc[labels].values
 
-# assembles a compact readable output with the following key columns
 cblof_scores_df = pd.DataFrame(index=rules_df.index)
 if id_cols:
     cblof_scores_df[id_cols] = rules_df[id_cols]
+
 cblof_scores_df["cluster_label"] = rules_df["kMean_label"]
 cblof_scores_df["cluster_size"] = per_row_cluster_size
 cblof_scores_df["distance_to_centroid"] = rules_df["dist_to_centroid"]
@@ -366,12 +293,9 @@ actual_highest_scores = int(cblof_scores_df["is_anomaly"].sum())
 if actual_highest_scores != expected_highest_scores:
     print(f"Warning: expected {expected_highest_scores} anomalies, found {actual_highest_scores}")
 
-# writes newly cleaned and vetted data to CBLOF Scores DataFrame
 cblof_scores_df.to_csv(CBLOF_OUTPUT, index=False)
 
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # ~~~~~~~~~~~~~~~~~~~~~~ Silhouette score ~~~~~~~~~~~~~~~~~~~~~~~~~~
-
 try:
     sil = silhouette_score(num_features_scaled, labels)
 except Exception:
@@ -380,39 +304,5 @@ except Exception:
 print("CBLOF completed.")
 print(f"Silhouette Score: {sil:.2f}")
 
-# ********* Silhouette Score Histogram ********
-try:
-    sil_samples = silhouette_samples(num_features_scaled, labels)
-    plt.figure()
-    plt.hist(sil_samples, bins=50)
-    plt.xlabel("Silhouette Coefficient")
-    plt.ylabel("Count")
-    plt.title(f"Silhouette Distribution (mean = {np.mean(sil_samples):.2f})")
-    plt.tight_layout()
-    plt.savefig("outputs/plot_silhouette_hist.png", dpi=150)
-    plt.show()
-except Exception as e:
-    print(f"Could not compute silhouette samples: {e}")
-# **********************************************
-
 print(f"Detected {actual_highest_scores} anomalous rules.")
 print(f"Saved results to {CBLOF_OUTPUT}")
-
-# ********* Anomolies per cluster ************
-anoms_by_cluster = (
-    pd.DataFrame({"label": labels, "is_anom": rules_df["is_anomalous"].astype(bool)})
-      .groupby("label")["is_anom"].sum()
-      .reindex(np.arange(len(cluster_sizes)), fill_value=0)
-)
-
-plt.figure()
-plt.bar(np.arange(len(cluster_sizes)), anoms_by_cluster)
-plt.xlabel("Cluster")
-plt.ylabel("Anomaly count")
-plt.title("Anomalies per Cluster")
-plt.tight_layout()
-plt.savefig("outputs/plot_anomalies_per_cluster.png", dpi=150)
-plt.show()
-# **********************************************
-
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
