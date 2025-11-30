@@ -22,11 +22,12 @@ GAMMA_OPTIONS = ['scale', 'auto'] + [0.0001, 0.0005, 0.001, 0.002, 0.005, 0.01, 
 KERNEL_OPTIONS = ['rbf', 'poly', 'sigmoid']
 POLY_DEGREES = [2, 3, 4]
 
-PERCENTILE_THRESHOLD = 95
+PERCENTILE_THRESHOLD = 99
 
 UNSCALED_DATA_PATH = 'outputs/unscaled_vectors.csv'
 SCALED_DATA_PATH = 'outputs/vectorized.csv'
 OUTPUT_GRAPH_PATH = 'outputs/top_drivers_3d_ONE_CLASS_SVM.png'
+OUTPUT_OUTLIERS_PATH = 'outputs/one_class_svm_outliers.csv'
 
 def tune_svm_parameters(scaled_vector_values, nu_range, kernel_options, gamma_options):
     """This function tries different settings to find the best fit."""
@@ -247,11 +248,77 @@ def main():
         svm_rbf_counts, svm_poly_counts, best_score, best_poly_score, len(unscaled_vector_df)
     )
     
-    # Find the most important features
-    print("\n[5/6] Figuring out which features matter most (RBF Kernel)...")
-    print("-" * 60)
+    # Decide which kernel is better based on silhouette score
+    kernel_scores = {
+        "rbf": best_score,
+        "poly": best_poly_score
+    }
+    best_kernel = max(kernel_scores, key=kernel_scores.get)
+    print(f"\n✓ Best kernel based on silhouette score: {best_kernel}")
+
+    # Map kernel name to the correct anomaly column and parameters
+    kernel_to_anom_col = {
+        "rbf": "SVM_RBF_Anomaly",
+        "poly": "SVM_Poly_Anomaly"
+    }
+    kernel_to_params = {
+        "rbf": {"params": best_params, "score": best_score},
+        "poly": {"params": best_poly_params, "score": best_poly_score}
+    }
+
+    anom_col = kernel_to_anom_col[best_kernel]
+    y_anom = unscaled_vector_df[anom_col]
+    best_kernel_info = kernel_to_params[best_kernel]
     
-        # Find the most important features using the BEST kernel
+    # Save outlier rows with original values, Silhouette scores, and best parameters
+    outliers = unscaled_vector_df[y_anom == -1].copy()
+    if len(outliers) > 0:
+        # Drop the old main columns (created at lines 241-242) to avoid duplicates
+        if 'SVM_Anomaly' in outliers.columns:
+            outliers = outliers.drop(columns=['SVM_Anomaly'])
+        if 'SVM_Score' in outliers.columns:
+            outliers = outliers.drop(columns=['SVM_Score'])
+        
+        # Only keep feature columns and the best kernel's anomaly/score columns (like IF does)
+        # Remove other SVM columns to match IF structure
+        if best_kernel == "rbf":
+            # Rename best kernel columns to match IF naming pattern
+            outliers = outliers.rename(columns={'SVM_RBF_Anomaly': 'SVM_Anomaly', 'SVM_RBF_Score': 'SVM_Score'})
+            # Drop other kernel columns
+            cols_to_drop = ['SVM_Poly_Anomaly', 'SVM_Poly_Score']
+        else:  # poly
+            # Rename best kernel columns to match IF naming pattern
+            outliers = outliers.rename(columns={'SVM_Poly_Anomaly': 'SVM_Anomaly', 'SVM_Poly_Score': 'SVM_Score'})
+            # Drop other kernel columns
+            cols_to_drop = ['SVM_RBF_Anomaly', 'SVM_RBF_Score']
+        
+        outliers = outliers.drop(columns=[col for col in cols_to_drop if col in outliers.columns])
+        
+        # Reorder columns to match IF format: features, then SVM_Anomaly, SVM_Score, then parameters
+        feature_cols = [col for col in outliers.columns if col not in ['SVM_Anomaly', 'SVM_Score', 'Silhouette_Score', 'Nu', 'Gamma', 'Kernel', 'Degree']]
+        other_cols = ['SVM_Anomaly', 'SVM_Score'] if 'SVM_Anomaly' in outliers.columns and 'SVM_Score' in outliers.columns else []
+        param_cols = ['Silhouette_Score', 'Nu', 'Gamma']
+        if 'Degree' in outliers.columns:
+            param_cols.append('Degree')
+        param_cols.append('Kernel')
+        outliers = outliers[[col for col in feature_cols + other_cols + param_cols if col in outliers.columns]]
+        
+        # Add parameters (similar to IF's Contamination and N_estimators)
+        outliers['Silhouette_Score'] = best_kernel_info["score"]
+        if best_kernel == "rbf":
+            outliers['Nu'] = best_params['nu']
+            outliers['Gamma'] = best_params['gamma']
+            outliers['Kernel'] = 'rbf'
+        else:  # poly
+            outliers['Nu'] = best_poly_params['nu']
+            outliers['Gamma'] = best_poly_params['gamma']
+            outliers['Degree'] = best_poly_params['degree']
+            outliers['Kernel'] = 'poly'
+        
+        outliers.to_csv(OUTPUT_OUTLIERS_PATH, index=False)
+        print(f"✓ Saved outliers with original values, Silhouette score, and best parameters to {OUTPUT_OUTLIERS_PATH}")
+    
+    # Find the most important features using the BEST kernel
     print("\n[5/6] Figuring out which features matter most (best kernel)...")
     print("-" * 60)
 
@@ -263,23 +330,6 @@ def main():
             'SVM_Poly_Anomaly', 'SVM_Poly_Score'
         ]
     ]
-
-    # Decide which kernel is better based on silhouette score
-    kernel_scores = {
-        "rbf": best_score,
-        "poly": best_poly_score
-    }
-    best_kernel = max(kernel_scores, key=kernel_scores.get)
-    print(f"✓ Best kernel based on silhouette score: {best_kernel}")
-
-    # Map kernel name to the correct anomaly column
-    kernel_to_anom_col = {
-        "rbf": "SVM_RBF_Anomaly",
-        "poly": "SVM_Poly_Anomaly"
-    }
-
-    anom_col = kernel_to_anom_col[best_kernel]
-    y_anom = unscaled_vector_df[anom_col]
 
     if len(unscaled_vector_df[y_anom == -1]) > 0:
         # Use two methods to find top features
@@ -313,6 +363,8 @@ def main():
     print("\n" + "=" * 60)
     print("✓ All done! One-Class SVM analysis finished.")
     print("=" * 60)
+    
+    return unscaled_vector_df, scaled_vector_df
 
 if __name__ == "__main__":
     main()
