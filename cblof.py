@@ -170,19 +170,6 @@ print("Number of Rule Anomalies:", rules_df["is_anomalous"].sum(),
       "\nNumber of Normal Rules:", (~rules_df["is_anomalous"]).sum())
 assert points_2d.shape[0] == len(rules_df), "Mismatch: points_2d vs rules_df rows"
 
-# ********* TOP Features ********
-top_features = feature_diffs.head(2).index.tolist()
-plt.figure(figsize=(7, 5))
-plt.scatter(rules_df.loc[~rules_df["is_anomalous"], top_features[0]], rules_df.loc[~rules_df["is_anomalous"], top_features[1]], color='blue', s=10, alpha=0.4, label='Normal')
-plt.scatter(rules_df.loc[rules_df["is_anomalous"], top_features[0]], rules_df.loc[rules_df["is_anomalous"], top_features[1]], color='red', edgecolors='black', linewidths=0.3, s=25, alpha=0.9, label='Anomaly')
-plt.xlabel(top_features[0])
-plt.ylabel(top_features[1])
-plt.title(f"Anomalies in Feature Space: {top_features[0]} vs {top_features[1]}")
-plt.legend()
-plt.tight_layout()
-plt.savefig("outputs/CBLOF_top_features_scatter.png", dpi=150)
-plt.show()
-
 # ********* 2D Cluster scatter plot ********
 plt.figure()
 plt.scatter(points_2d[:, 0], points_2d[:, 1], s=10, alpha=0.6, c=labels)
@@ -221,22 +208,13 @@ plt.show()
 # ***************************************
 
 # ~~~~~~~~~~~~~ Building a clean CBLOF score table ~~~~~~~~~~~~~~~~~
+unscaled_vector_df = pd.read_csv("outputs/unscaled_vectors.csv")
+
 cblof_scores = rules_df["cblof"].values
+unscaled_vector_df["cblof"] = cblof_scores
+unscaled_vector_df["is_anomalous"] = rules_df["is_anomalous"].values
 
-sorted_idx = np.argsort(cblof_scores) 
-
-descending_idx = []
-for i in range(len(sorted_idx) - 1, -1, -1):
-    descending_idx.append(sorted_idx[i])
-
-descending_idx = np.array(descending_idx)
-
-if len(cblof_scores) >= 4:
-    anom_idx = descending_idx[0:4]
-else:
-    anom_idx = descending_idx
-
-source_df = rules_df.iloc[anom_idx].copy()
+source_df = unscaled_vector_df[unscaled_vector_df["is_anomalous"]].copy()
 
 required_rule_cols = [
     "antecedents", "consequents",
@@ -251,8 +229,8 @@ for col in required_rule_cols:
 
 cblof_scores_df = source_df[required_rule_cols].copy()
 
-cblof_scores_df["IF_Anomaly"] = -1 
-cblof_scores_df["IF_Score"] = cblof_scores[anom_idx]
+cblof_scores_df["CBLOF_Anomaly"] = -1 
+# cblof_scores_df["CBLOF_Score"] = source_df["cblof"].values
 
 try:
     sil = silhouette_score(num_features_scaled, labels)
@@ -261,18 +239,14 @@ except Exception:
 
 cblof_scores_df["Silhouette_Score"] = sil
 
-contamination = len(anom_idx) / len(rules_df) if len(rules_df) > 0 else float("nan")
+contamination = (
+    round(len(source_df) / len(rules_df), 2)
+    if len(rules_df) > 0
+    else float("nan")
+)
 cblof_scores_df["Contamination"] = contamination
 
-cblof_scores_df["N_estimators"] = 10
-
 os.makedirs(os.path.dirname(CBLOF_OUTPUT), exist_ok=True)
-
-topFour = 4
-actual_highest_scores = len(cblof_scores_df)
-if actual_highest_scores != topFour:
-    print(f"Warning: expected {topFour} anomalies in output, found {actual_highest_scores}")
-
 cblof_scores_df.to_csv(CBLOF_OUTPUT, index=False)
 
 # ~~~~~~~~~~~~~~~~~~~~~~ Silhouette score ~~~~~~~~~~~~~~~~~~~~~~~~~~
