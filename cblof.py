@@ -10,7 +10,7 @@ from sklearn.decomposition import PCA
 OUTPUT_DIR = "outputs"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 RULE_INPUT = "outputs/vectorized.csv"
-CBLOF_OUTPUT = "outputs/cblof_scores.csv"
+CBLOF_OUTPUT = "outputs/cblof_outliers.csv"
 
 # ~~~~~~ Load the rules CSV and quick clean just in case ~~~~~~~~~
 rules_df = pd.read_csv(RULE_INPUT)
@@ -49,20 +49,7 @@ for k in k_range:
     if sil > best_sil:
         best_sil, best_k = sil, k
 
-# ******* refine the silhouette-based *******
-plt.figure()
-plt.plot(k_range, silhouette_per_k, marker='o')
-plt.xlabel("Number of Clusters (k)")
-plt.ylabel("Silhouette Score")
-plt.title("Silhouette Score vs. Number of Clusters")
-plt.grid(True, alpha=0.4)
-plt.tight_layout()
-plt.savefig("outputs/CBLOF_silhouette_vs_k.png", dpi=150)
-plt.show()
-# ********************************************
-
 cluster_num = best_k
-print(f"[Auto-k] Using k={cluster_num} (best silhouette={best_sil:.3f})")
 
 RANDOM_STATE = 42   #default number used for random states
 
@@ -78,21 +65,8 @@ centroid_original = scaler.inverse_transform(centroid_scaled)
 
 cluster_size = np.bincount(labels, minlength=cluster_num)
 
-# ******* Cluster Size Bar Chart *******
-plt.figure()
-x = np.arange(len(cluster_size))
-plt.bar(x, cluster_size)
-plt.xlabel("Cluster label")
-plt.ylabel("Size (rows)")
-plt.title("K-Means Cluster Sizes")
-plt.tight_layout()
-plt.savefig("outputs/CBLOF_cluster_sizes.png", dpi=150)
-plt.show()
-# ***************************************
-
 centroids_df = pd.DataFrame(centroid_original, columns=numeric_columns)
 centroids_df.index.name = "Cluster"
-centroids_df.to_csv("outputs/centroids_original_units.csv", index=False)
 
 rules_df["kMean_label"] = labels
 
@@ -106,17 +80,6 @@ cluster_sizes = np.bincount(labels, minlength=cluster_num)
 
 cblof = cluster_sizes[labels] * dist_to_centroid
 rules_df["cblof"] = cblof
-
-# ********* distance histogram ********
-plt.figure()
-plt.hist(rules_df["dist_to_centroid"], bins=50)
-plt.xlabel("Distance to Centroid Histogram(scaled)")
-plt.ylabel("Count")
-plt.title("Distribution of Distances to Centroid")
-plt.tight_layout()
-plt.savefig("outputs/CBLOF_distance_hist.png", dpi=150)
-plt.show()
-# ***************************************
 
 def label_anomalies_cblof(cblof_scores, method="highest_scores", highest_scores=22, percent=95, k=3.0):
     s = np.asarray(cblof_scores)
@@ -199,20 +162,12 @@ plt.tight_layout()
 plt.savefig("outputs/CBLOF_clusters_normals_vs_anomalies.png", dpi=200)
 plt.show()
 
-rules_df.to_csv("outputs/rules_with_cblof.csv", index=False)
-pd.DataFrame({"cluster": np.arange(cluster_num), "size": cluster_sizes}).to_csv(
-    "outputs/kMean_cluster_sizes.csv", index=False
-)
-
 # ********* overall outcome ********
 print()
 print("--- Diagnostics ---")
-print("Rows after cleaning:", len(rules_df))
-print("points_2d shape:", points_2d.shape)
-print("Anomalies:", rules_df["is_anomalous"].sum(),
-      "Normals:", (~rules_df["is_anomalous"]).sum())
-print("Unique clusters:", np.unique(labels))
-print("Cluster sizes:", np.bincount(labels))
+print("Total Data point Rules:", len(rules_df))
+print("Number of Rule Anomalies:", rules_df["is_anomalous"].sum(),
+      "\nNumber of Normal Rules:", (~rules_df["is_anomalous"]).sum())
 assert points_2d.shape[0] == len(rules_df), "Mismatch: points_2d vs rules_df rows"
 
 # ********* TOP Features ********
@@ -266,32 +221,57 @@ plt.show()
 # ***************************************
 
 # ~~~~~~~~~~~~~ Building a clean CBLOF score table ~~~~~~~~~~~~~~~~~
-id_cols = rules_df.select_dtypes(exclude=np.number).columns.tolist()
-cluster_size_map = pd.Series(cluster_sizes, index=np.arange(cluster_num))
-per_row_cluster_size = cluster_size_map.loc[labels].values
+cblof_scores = rules_df["cblof"].values
 
-cblof_scores_df = pd.DataFrame(index=rules_df.index)
-if id_cols:
-    cblof_scores_df[id_cols] = rules_df[id_cols]
+sorted_idx = np.argsort(cblof_scores) 
 
-cblof_scores_df["cluster_label"] = rules_df["kMean_label"]
-cblof_scores_df["cluster_size"] = per_row_cluster_size
-cblof_scores_df["distance_to_centroid"] = rules_df["dist_to_centroid"]
-cblof_scores_df["cblof_score"] = rules_df["cblof"]
-cblof_scores_df["is_anomaly"] = rules_df["is_anomalous"].astype(bool)
+descending_idx = []
+for i in range(len(sorted_idx) - 1, -1, -1):
+    descending_idx.append(sorted_idx[i])
+
+descending_idx = np.array(descending_idx)
+
+if len(cblof_scores) >= 4:
+    anom_idx = descending_idx[0:4]
+else:
+    anom_idx = descending_idx
+
+source_df = rules_df.iloc[anom_idx].copy()
+
+required_rule_cols = [
+    "antecedents", "consequents",
+    "antecedent support", "consequent support",
+    "support", "confidence", "lift", "leverage",
+    "zhangs_metric", "jaccard", "certainty", "kulczynski"
+]
+
+for col in required_rule_cols:
+    if col not in source_df.columns:
+        source_df[col] = np.nan
+
+cblof_scores_df = source_df[required_rule_cols].copy()
+
+cblof_scores_df["IF_Anomaly"] = -1 
+cblof_scores_df["IF_Score"] = cblof_scores[anom_idx]
+
+try:
+    sil = silhouette_score(num_features_scaled, labels)
+except Exception:
+    sil = float("nan")
+
+cblof_scores_df["Silhouette_Score"] = sil
+
+contamination = len(anom_idx) / len(rules_df) if len(rules_df) > 0 else float("nan")
+cblof_scores_df["Contamination"] = contamination
+
+cblof_scores_df["N_estimators"] = 10
+
 os.makedirs(os.path.dirname(CBLOF_OUTPUT), exist_ok=True)
 
-# sanity check to make sure same number of rows
-expected_rows = len(rules_df)
-actual_rows = len(cblof_scores_df)
-if actual_rows != expected_rows:
-    raise RuntimeError(f"Row count mismatch: expected {expected_rows}, got {actual_rows}")
-
-# sanity check to make sure anomoly data matches
-expected_highest_scores = 22
-actual_highest_scores = int(cblof_scores_df["is_anomaly"].sum())
-if actual_highest_scores != expected_highest_scores:
-    print(f"Warning: expected {expected_highest_scores} anomalies, found {actual_highest_scores}")
+topFour = 4
+actual_highest_scores = len(cblof_scores_df)
+if actual_highest_scores != topFour:
+    print(f"Warning: expected {topFour} anomalies in output, found {actual_highest_scores}")
 
 cblof_scores_df.to_csv(CBLOF_OUTPUT, index=False)
 
@@ -301,8 +281,7 @@ try:
 except Exception:
     sil = float("nan")
 
-print("CBLOF completed.")
-print(f"Silhouette Score: {sil:.2f}")
+print("\nCBLOF completed.")
+print(f"Best Silhouette Score: {best_sil:.3f}")
 
-print(f"Detected {actual_highest_scores} anomalous rules.")
-print(f"Saved results to {CBLOF_OUTPUT}")
+print(f"\nSaved results to {CBLOF_OUTPUT}")
