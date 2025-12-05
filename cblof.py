@@ -125,7 +125,6 @@ plt.xlabel("Mean Difference (Anomaly vs Normal)")
 plt.title(f"Top Features Driving Anomalies")
 plt.tight_layout()
 plt.savefig("outputs/CBLOF_top_features_driving_anomalies.png", dpi=150)
-plt.show()
 
 # *** Threshold Histogram after Anomoly detection ***
 plt.figure()
@@ -136,7 +135,6 @@ plt.ylabel("Count")
 plt.title(f"CBLOF Distribution (threshold = {cblof_threshold:.2f})")
 plt.tight_layout()
 plt.savefig("outputs/CBLOF_hist.png", dpi=150)
-plt.show()
 
 # ********* Anomolies Scattrter Plot **************
 pca = PCA(n_components=2, random_state=42)
@@ -160,7 +158,6 @@ plt.title("Clusters with Anomalies Highlighted")
 plt.legend()
 plt.tight_layout()
 plt.savefig("outputs/CBLOF_clusters_normals_vs_anomalies.png", dpi=200)
-plt.show()
 
 # ********* overall outcome ********
 print()
@@ -177,7 +174,6 @@ plt.scatter(centroids_2d[:, 0], centroids_2d[:, 1], s=120, marker="X", edgecolor
 plt.title("Clusters in 2D Space")
 plt.tight_layout()
 plt.savefig("outputs/CBLOF_clusters_2d.png", dpi=150)
-plt.show()
 
 # ********* 3D Cluster scatter plot ********
 pca3d = PCA(n_components=3, random_state=42)
@@ -204,7 +200,7 @@ ax.set_title("3D View of Clusters and Anomalies")
 ax.legend(loc='best')
 plt.tight_layout()
 plt.savefig("outputs/CBLOF_clusters_3d.png", dpi=200)
-plt.show()
+plt.close()
 # ***************************************
 
 # ~~~~~~~~~~~~~ Building a clean CBLOF score table ~~~~~~~~~~~~~~~~~
@@ -258,4 +254,9 @@ except Exception:
 print("\nCBLOF completed.")
 print(f"Best Silhouette Score: {best_sil:.3f}")
 
-print(f"\nSaved results to {CBLOF_OUTPUT}")
+print(f"\nSaved driving features plot to outputs/CBLOF_top_features_driving_anomalies.png")
+print(f"Saved CBLOF histogram to outputs/CBLOF_hist.png")
+print(f"Saved CBLOF anomalies scatter plot to outputs/CBLOF_clusters_normals_vs_anomalies.png")
+print(f"Saved CBLOF 2D clusters scatter plot to outputs/CBLOF_clusters_2d.png")
+print(f"Saved output to outputs/CBLOF_clusters_3d.png")
+print(f"Saved results to {CBLOF_OUTPUT}")
