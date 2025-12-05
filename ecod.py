@@ -98,3 +98,28 @@ ax.legend()
 plt.savefig('outputs/top_drivers_3d_ECOD.png')
 plt.close()
 print('✓ 3D scatter plot saved to outputs/top_drivers_isolation_ECOD.png')
+
+# --- Plot Top 10 Feature Differences for ECOD Anomalies ---
+print("Plotting top feature differences for ECOD anomalies...")
+
+# Select only numeric feature columns (excluding anomaly columns)
+numeric_cols = [col for col in vector_scaled.columns if col not in ['ECOD_Anomaly']]
+
+# Split outliers and normals
+anomalies = vector_scaled[vector_scaled['ECOD_Anomaly'] == -1]
+normals = vector_scaled[vector_scaled['ECOD_Anomaly'] == 1]
+
+# Calculate mean difference for each feature
+feature_diffs = (anomalies[numeric_cols].mean() - normals[numeric_cols].mean()).abs().sort_values(ascending=False)
+
+# Plot top 10 feature differences
+plt.figure(figsize=(8, 5))
+feature_diffs.head(10).plot(kind='barh', color='firebrick', alpha=0.8)
+plt.gca().invert_yaxis()
+plt.xlabel("Mean Difference (Anomaly vs Normal)")
+plt.title("Top Features Driving ECOD Anomalies")
+plt.tight_layout()
+plt.savefig("outputs/ECOD_top_features_driving_anomalies.png", dpi=150)
+plt.close()
+print("✓ Saved driving features plot to outputs/ECOD_top_features_driving_anomalies.png")
+

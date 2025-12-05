@@ -168,6 +168,29 @@ def print_comparison_table(rbf_counts, poly_counts, rbf_score, poly_score, total
           f"{poly_normal/total_samples*100:<15.1f} {poly_anomaly/total_samples*100:<15.1f} {poly_score:<15.4f}")
     print(f"\nNote: Using percentile-based thresholding (bottom {100 - PERCENTILE_THRESHOLD}% as outliers)")
 
+def plot_top_10_feature_diffs_ocsvm(scaled_vector_df):
+
+    # Select only numeric feature columns (excluding anomaly columns)
+    numeric_cols = [col for col in scaled_vector_df.columns if col not in ['SVM_Anomaly', 'SVM_RBF_Anomaly', 'SVM_Poly_Anomaly']]
+
+    # Split outliers and normals
+    anomalies = scaled_vector_df[scaled_vector_df['SVM_Anomaly'] == -1]
+    normals = scaled_vector_df[scaled_vector_df['SVM_Anomaly'] == 1]
+
+    # Calculate mean difference for each feature
+    feature_diffs = (anomalies[numeric_cols].mean() - normals[numeric_cols].mean()).abs().sort_values(ascending=False)
+
+    # Plot top 10 feature differences
+    plt.figure(figsize=(8, 5))
+    feature_diffs.head(10).plot(kind='barh', color='firebrick', alpha=0.8)
+    plt.gca().invert_yaxis()
+    plt.xlabel("Mean Difference (Anomaly vs Normal)")
+    plt.title("Top Features Driving SVM Anomalies")
+    plt.tight_layout()
+    plt.savefig("outputs/OCSVM_top_features_driving_anomalies.png", dpi=150)
+    plt.close()
+    print("✓ Saved driving features plot to outputs/OCSVM_top_features_driving_anomalies.png")
+
 def main():
     """Run the whole analysis step by step."""
     print("=" * 60)
@@ -360,9 +383,13 @@ def main():
     else:
         print("⚠ No outliers found for the best kernel, so skipping the visualization")
 
+    plot_top_10_feature_diffs_ocsvm(scaled_vector_df)
+
     print("\n" + "=" * 60)
     print("✓ All done! One-Class SVM analysis finished.")
     print("=" * 60)
+
+
     
     return unscaled_vector_df, scaled_vector_df
 

@@ -109,3 +109,22 @@ ax.legend()
 plt.savefig('outputs/top_drivers_3d_ISOLATION_FOREST.png')
 plt.close()
 print('✓ 3D scatter plot saved to outputs/top_drivers_ISOLATION_FOREST.png')
+
+# --- 5. Plot Top Feature Differences for Anomalies ---
+print("Plotting top feature differences for anomalies...")
+
+# Calculate mean difference between outliers and normals for each feature
+normal_rows = scaled_vector_df[scaled_vector_df['IF_Anomaly'] == 1]
+anomaly_rows = scaled_vector_df[scaled_vector_df['IF_Anomaly'] == -1]
+
+feature_diff = (anomaly_rows[feature_cols].mean() - normal_rows[feature_cols].mean()).abs().sort_values(ascending=False)
+
+plt.figure(figsize=(8, 5))
+feature_diff.head(10).plot(kind='barh', color='firebrick', alpha=0.8)
+plt.gca().invert_yaxis()
+plt.xlabel("Mean Difference (Anomaly vs Normal)")
+plt.title("Top Features Driving Isolation Forest Anomalies")
+plt.tight_layout()
+plt.savefig("outputs/IF_top_features_driving_anomalies.png", dpi=150)
+plt.close()
+print("✓ Saved driving features plot to outputs/IF_top_features_driving_anomalies.png")
