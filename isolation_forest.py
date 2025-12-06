@@ -52,8 +52,8 @@ unscaled_vector_df['IF_Anomaly'] = iso_forest.fit_predict(scaled_vector_values)
 scaled_vector_df['IF_Anomaly'] = iso_forest.fit_predict(scaled_vector_values)
 
 # Calculate the anomaly score: Invert it so higher scores indicate higher likelihood of fraud
-unscaled_vector_df['IF_Score'] = -iso_forest.decision_function(scaled_vector_values)
-scaled_vector_df['IF_Score'] = -iso_forest.decision_function(scaled_vector_values)
+unscaled_vector_df['IF_Score'] = iso_forest.decision_function(scaled_vector_values)
+scaled_vector_df['IF_Score'] = iso_forest.decision_function(scaled_vector_values)
 
 # Save the results with anomalies and scores
 print(f"✓ Isolation Forest ( 1 = normal, -1 = anomaly ): {unscaled_vector_df['IF_Anomaly'].value_counts().to_dict()}")
